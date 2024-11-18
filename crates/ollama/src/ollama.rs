@@ -1,3 +1,6 @@
+pub mod ollama_completion_provider;
+pub use ollama_completion_provider::{OllamaCompletionProvider, OLLAMA_DEBOUNCE_TIMEOUT}; 
+
 use anyhow::{anyhow, Context, Result};
 use futures::{io::BufReader, stream::BoxStream, AsyncBufReadExt, AsyncReadExt, StreamExt};
 use http_client::{http, AsyncBody, HttpClient, Method, Request as HttpRequest};

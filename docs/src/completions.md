@@ -50,6 +50,18 @@ To use Supermaven, add the following to your `settings.json`:
 
 You should be able to sign-in to Supermaven by clicking on the Supermaven icon in the status bar and following the setup instructions.
 
+### Ollama
+
+To use Ollama completions, first install Ollama from [ollama.com](https://ollama.com), then add the following to your `settings.json`:
+
+```json
+{
+  "features": {
+    "inline_completion_provider": "ollama"
+  }
+}
+```
+
 ## Using Inline completions
 
 Once you have configured an Inline Completions provider, you can start using inline completions in your code. Inline completions will appear as you type, and you can accept them by pressing `tab` or `enter` or hide them by pressing `esc`.

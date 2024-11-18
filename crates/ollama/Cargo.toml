@@ -22,3 +22,7 @@ http_client.workspace = true
 schemars = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
+editor = { path = "../editor" }
+gpui = { path = "../gpui" }
+language = { path = "../language" }
+client = { path = "../client" }

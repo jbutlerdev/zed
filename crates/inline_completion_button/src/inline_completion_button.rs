@@ -196,6 +196,19 @@ impl Render for InlineCompletionButton {
                         ),
                 );
             }
+            InlineCompletionProvider::Ollama => {
+                let tooltip_text = "Ollama";
+
+                return div().child(
+                    PopoverMenu::new("ollama")
+                        .menu(move |cx| Some(ContextMenu::build(cx, |menu, _| menu)))
+                        .anchor(AnchorCorner::BottomRight)
+                        .trigger(
+                            IconButton::new("ollama-icon", IconName::AiOllama)
+                                .tooltip(move |cx| Tooltip::text(tooltip_text, cx)),
+                        ),
+                );
+            }
         }
     }
 }

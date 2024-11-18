@@ -8,6 +8,7 @@ use gpui::{AnyWindowHandle, AppContext, Context, ViewContext, WeakView};
 use language::language_settings::all_language_settings;
 use settings::SettingsStore;
 use supermaven::{Supermaven, SupermavenCompletionProvider};
+use ollama::OllamaCompletionProvider;
 
 pub fn init(telemetry: Arc<Telemetry>, cx: &mut AppContext) {
     let editors: Rc<RefCell<HashMap<WeakView<Editor>, AnyWindowHandle>>> = Rc::default();
@@ -130,6 +131,13 @@ fn assign_inline_completion_provider(
                 });
                 editor.set_inline_completion_provider(Some(provider), cx);
             }
+        }
+        language::language_settings::InlineCompletionProvider::Ollama => {
+            let model = ollama::Model::new("codellama", None, None);
+            let provider = cx.new_model(|_| {
+                OllamaCompletionProvider::new(model).with_telemetry(telemetry.clone())
+            });
+            editor.set_inline_completion_provider(Some(provider), cx);
         }
     }
 }

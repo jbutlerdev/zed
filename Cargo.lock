@@ -7792,8 +7792,12 @@ name = "ollama"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "client",
+ "editor",
  "futures 0.3.31",
+ "gpui",
  "http_client",
+ "language",
  "schemars",
  "serde",
  "serde_json",
@@ -15482,6 +15486,7 @@ dependencies = [
  "nix",
  "node_runtime",
  "notifications",
+ "ollama",
  "outline",
  "outline_panel",
  "parking_lot",
