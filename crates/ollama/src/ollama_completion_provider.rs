@@ -1,4 +1,4 @@
-use crate::{ChatMessage, ChatOptions, ChatRequest, KeepAlive, Model};
+use crate::{ChatMessage, ChatOptions, ChatRequest, KeepAlive, OllamaModel};
 use anyhow::Result;
 use client::telemetry::Telemetry;
 use editor::{CompletionProposal, Direction, InlayProposal, InlineCompletionProvider};
@@ -14,12 +14,12 @@ pub struct OllamaCompletionProvider {
     current_completion: Option<String>,
     file_extension: Option<String>,
     pending_refresh: Task<Result<()>>,
-    model: Model,
+    model: OllamaModel,
     telemetry: Option<Arc<Telemetry>>,
 }
 
 impl OllamaCompletionProvider {
-    pub fn new(model: Model) -> Self {
+    pub fn new(model: OllamaModel) -> Self {
         Self {
             buffer_id: None,
             current_completion: None,

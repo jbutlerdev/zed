@@ -1,17 +1,42 @@
 pub mod ollama_completion_provider;
 pub use ollama_completion_provider::{OllamaCompletionProvider, OLLAMA_DEBOUNCE_TIMEOUT}; 
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use futures::{io::BufReader, stream::BoxStream, AsyncBufReadExt, AsyncReadExt, StreamExt};
 use http_client::{http, AsyncBody, HttpClient, Method, Request as HttpRequest};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 use std::{convert::TryFrom, sync::Arc, time::Duration};
-use reqwest::Client;
-use tokio;
+use gpui::{AppContext, Context, Global, Model};
 
 pub const OLLAMA_API_URL: &str = "http://localhost:11434";
+
+pub fn init(http_client: Arc<dyn HttpClient>, cx: &mut AppContext) {
+    let ollama = cx.new_model(move |cx| Ollama::new(http_client.clone()));
+    Ollama::set_global(ollama, cx);
+}
+
+pub struct Ollama {
+    http_client: Arc<dyn HttpClient>,
+}
+
+struct GlobalOllama(Model<Ollama>);
+
+impl Global for GlobalOllama {}
+
+impl Ollama {
+    pub fn new(http_client: Arc<dyn HttpClient>) -> Self {
+        Self { http_client }
+    }
+    pub fn global(cx: &AppContext) -> Option<Model<Self>> {
+        cx.try_global::<GlobalOllama>()
+            .map(|model| model.0.clone())
+    }
+    pub fn set_global(ollama: Model<Self>, cx: &mut AppContext) {
+        cx.set_global(GlobalOllama(ollama));
+    }
+}
 
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -68,7 +93,7 @@ impl Default for KeepAlive {
 
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
-pub struct Model {
+pub struct OllamaModel {
     pub name: String,
     pub base_url: String,
     pub display_name: Option<String>,
@@ -95,7 +120,7 @@ fn get_max_tokens(name: &str) -> usize {
     .clamp(1, MAXIMUM_TOKENS)
 }
 
-impl Model {
+impl OllamaModel {
     pub fn new(name: String, base_url: String) -> Self {
         Self {
             max_tokens: get_max_tokens(&name),
@@ -119,27 +144,21 @@ impl Model {
     }
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
-        let client = Client::new();
         let url = format!("{}/api/chat", self.base_url);
 
         log::info!("Starting chat request: {:?}", request);
-        // Create a new runtime for this request
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
 
-        log::info!("Sending request to Ollama: {:?}", url);
         // Send the request to Ollama
-        let response = rt.block_on(async {
-            client
-                .post(&url)
-                .timeout(Duration::from_secs(30))
-                .json(&request)
-                .send()
-                .await
-        });
-        log::info!("Response: {:?}", response);
-        let chat_response = response.unwrap().json::<ChatResponse>().await?;
+        let request = HttpRequest::builder()
+            .method(Method::POST)
+            .uri(url)
+            .header("Content-Type", "application/json")
+            .body(AsyncBody::from(serde_json::to_string(&request)?))?;
+
+        let mut response = http_client.send(request).await?;
+        let mut body = String::new();
+        response.body_mut().read_to_string(&mut body).await?;
+        let chat_response: ChatResponse = serde_json::from_str(&body)?;
         log::info!("Chat response: {:?}", chat_response);
         Ok(chat_response)
     }

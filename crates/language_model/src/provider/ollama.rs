@@ -77,7 +77,7 @@ impl State {
                 // indicating which models are embedding models,
                 // simply filter out models with "-embed" in their name
                 .filter(|model| !model.name.contains("-embed"))
-                .map(|model| ollama::Model::new(model.name, api_url.clone()))
+                .map(|model| ollama::OllamaModel::new(model.name, api_url.clone()))
                 .collect();
 
             models.sort_by(|a, b| a.name.cmp(&b.name));
@@ -172,7 +172,7 @@ impl LanguageModelProvider for OllamaLanguageModelProvider {
         {
             models.insert(
                 model.name.clone(),
-                ollama::Model {
+                ollama::OllamaModel {
                     name: model.name.clone(),
                     display_name: model.display_name.clone(),
                     max_tokens: model.max_tokens,
