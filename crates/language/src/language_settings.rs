@@ -208,6 +208,10 @@ pub struct InlineCompletionSettings {
     pub provider: InlineCompletionProvider,
     /// A list of globs representing files that inline completions should be disabled for.
     pub disabled_globs: Vec<GlobMatcher>,
+    /// The base url for local api calls.
+    pub api_url: Option<String>,
+    /// The model to use for inline completions.
+    pub model: Option<String>,
 }
 
 /// The settings for all languages.
@@ -390,6 +394,10 @@ pub struct InlineCompletionSettingsContent {
     /// A list of globs representing files that inline completions should be disabled for.
     #[serde(default)]
     pub disabled_globs: Option<Vec<String>>,
+    /// The base url for local api calls.
+    pub api_url: Option<String>,
+    /// The model to use for inline completions.
+    pub model: Option<String>,
 }
 
 /// The settings for enabling/disabling features.
@@ -990,6 +998,16 @@ impl settings::Settings for AllLanguageSettings {
 
         let mut file_types: HashMap<Arc<str>, GlobSet> = HashMap::default();
 
+        let mut inline_completion_api_url = default_value
+            .inline_completions
+            .as_ref()
+            .and_then(|c| c.api_url.as_ref());
+
+        let mut inline_completion_model = default_value
+            .inline_completions
+            .as_ref()
+            .and_then(|c| c.model.as_ref());
+
         for (language, suffixes) in &default_value.file_types {
             let mut builder = GlobSetBuilder::new();
 
@@ -1017,6 +1035,22 @@ impl settings::Settings for AllLanguageSettings {
                 .and_then(|f| f.disabled_globs.as_ref())
             {
                 completion_globs = globs;
+            }
+
+            if let Some(api_url) = user_settings
+                .inline_completions
+                .as_ref()
+                .and_then(|c| c.api_url.as_ref())
+            {
+                inline_completion_api_url = Some(api_url);
+            }
+
+            if let Some(model) = user_settings
+                .inline_completions
+                .as_ref()
+                .and_then(|c| c.model.as_ref())
+            {
+                inline_completion_model = Some(model);
             }
 
             // A user's global settings override the default global settings and
@@ -1069,6 +1103,8 @@ impl settings::Settings for AllLanguageSettings {
                     .iter()
                     .filter_map(|g| Some(globset::Glob::new(g).ok()?.compile_matcher()))
                     .collect(),
+                api_url: inline_completion_api_url.map(|url| url.to_string()),
+                model: inline_completion_model.map(|model| model.to_string()),
             },
             defaults,
             languages,

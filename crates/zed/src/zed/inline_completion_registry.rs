@@ -133,7 +133,14 @@ fn assign_inline_completion_provider(
             }
         }
         language::language_settings::InlineCompletionProvider::Ollama => {
-            let model = ollama::Model::new("codellama", None, None);
+            let settings = all_language_settings(None, cx);
+            let api_url = settings.inline_completions.api_url.clone();
+            let model_name = settings.inline_completions.model.clone();
+
+            let model = ollama::Model::new(
+                model_name.unwrap_or_default(),
+                api_url.clone().unwrap_or_default(),
+            );
             let provider = cx.new_model(|_| {
                 OllamaCompletionProvider::new(model).with_telemetry(telemetry.clone())
             });

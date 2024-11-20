@@ -26,3 +26,6 @@ editor = { path = "../editor" }
 gpui = { path = "../gpui" }
 language = { path = "../language" }
 client = { path = "../client" }
+reqwest = { version = "0.11", features = ["json"] }
+log = { workspace = true }
+tokio = { workspace = true }

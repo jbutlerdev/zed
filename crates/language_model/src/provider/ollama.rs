@@ -77,7 +77,7 @@ impl State {
                 // indicating which models are embedding models,
                 // simply filter out models with "-embed" in their name
                 .filter(|model| !model.name.contains("-embed"))
-                .map(|model| ollama::Model::new(&model.name, None, None))
+                .map(|model| ollama::Model::new(model.name, api_url.clone()))
                 .collect();
 
             models.sort_by(|a, b| a.name.cmp(&b.name));
@@ -157,6 +157,7 @@ impl LanguageModelProvider for OllamaLanguageModelProvider {
 
     fn provided_models(&self, cx: &AppContext) -> Vec<Arc<dyn LanguageModel>> {
         let mut models: BTreeMap<String, ollama::Model> = BTreeMap::default();
+        let settings = &AllLanguageModelSettings::get_global(cx).ollama;
 
         // Add models from the Ollama API
         for model in self.state.read(cx).available_models.iter() {
@@ -176,6 +177,7 @@ impl LanguageModelProvider for OllamaLanguageModelProvider {
                     display_name: model.display_name.clone(),
                     max_tokens: model.max_tokens,
                     keep_alive: model.keep_alive.clone(),
+                    base_url: settings.api_url.clone(),
                 },
             );
         }

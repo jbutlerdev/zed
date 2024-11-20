@@ -8,6 +8,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 use std::{convert::TryFrom, sync::Arc, time::Duration};
+use reqwest::Client;
+use tokio;
 
 pub const OLLAMA_API_URL: &str = "http://localhost:11434";
 
@@ -68,6 +70,7 @@ impl Default for KeepAlive {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Model {
     pub name: String,
+    pub base_url: String,
     pub display_name: Option<String>,
     pub max_tokens: usize,
     pub keep_alive: Option<KeepAlive>,
@@ -93,13 +96,12 @@ fn get_max_tokens(name: &str) -> usize {
 }
 
 impl Model {
-    pub fn new(name: &str, display_name: Option<&str>, max_tokens: Option<usize>) -> Self {
+    pub fn new(name: String, base_url: String) -> Self {
         Self {
-            name: name.to_owned(),
-            display_name: display_name
-                .map(ToString::to_string)
-                .or_else(|| name.strip_suffix(":latest").map(ToString::to_string)),
-            max_tokens: max_tokens.unwrap_or_else(|| get_max_tokens(name)),
+            max_tokens: get_max_tokens(&name),
+            name,
+            base_url,
+            display_name: None,
             keep_alive: Some(KeepAlive::indefinite()),
         }
     }
@@ -114,6 +116,32 @@ impl Model {
 
     pub fn max_token_count(&self) -> usize {
         self.max_tokens
+    }
+
+    pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
+        let client = Client::new();
+        let url = format!("{}/api/chat", self.base_url);
+
+        log::info!("Starting chat request: {:?}", request);
+        // Create a new runtime for this request
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
+        log::info!("Sending request to Ollama: {:?}", url);
+        // Send the request to Ollama
+        let response = rt.block_on(async {
+            client
+                .post(&url)
+                .timeout(Duration::from_secs(30))
+                .json(&request)
+                .send()
+                .await
+        });
+        log::info!("Response: {:?}", response);
+        let chat_response = response.unwrap().json::<ChatResponse>().await?;
+        log::info!("Chat response: {:?}", chat_response);
+        Ok(chat_response)
     }
 }
 
@@ -183,6 +211,18 @@ pub struct ChatOptions {
     pub stop: Option<Vec<String>>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ChatResponse {
+    pub message: ChatMessage,
+    pub model: String,
+    pub created_at: String,
+    pub done: bool,
+    pub total_duration: Option<u64>,
+    pub load_duration: Option<u64>,
+    pub prompt_eval_duration: Option<u64>,
+    pub eval_duration: Option<u64>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -361,3 +401,4 @@ pub async fn preload_model(client: Arc<dyn HttpClient>, api_url: &str, model: &s
         ))
     }
 }
+

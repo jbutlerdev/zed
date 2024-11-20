@@ -3,8 +3,9 @@ use anyhow::Result;
 use client::telemetry::Telemetry;
 use editor::{CompletionProposal, Direction, InlayProposal, InlineCompletionProvider};
 use gpui::{AppContext, EntityId, Model as GpuiModel, ModelContext, Task};
-use language::{language_settings::all_language_settings, Buffer};
+use language::{language_settings::all_language_settings, Buffer, ToOffset};
 use std::{path::Path, sync::Arc, time::Duration};
+use log;
 
 pub const OLLAMA_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(75);
 
@@ -56,14 +57,25 @@ impl InlineCompletionProvider for OllamaCompletionProvider {
     fn refresh(
         &mut self,
         buffer: GpuiModel<Buffer>,
-        _cursor_position: language::Anchor,
+        cursor_position: language::Anchor,
         debounce: bool,
         cx: &mut ModelContext<Self>,
     ) {
         let model = self.model.clone();
         let buffer_clone = buffer.clone();
-        let buffer_text = buffer.read(cx).text().to_string();
+        let buffer = buffer.read(cx);
+        
+        // Get text before and after cursor
+        let cursor_offset = cursor_position.to_offset(&buffer.snapshot());
+        let buffer_text = buffer.text();
+        let (prefix, suffix) = buffer_text.split_at(cursor_offset);
+        let prompt = format!("{}<fim_prefix>\n{}<fim_suffix>\n{}<fim_middle>", 
+            prefix.trim_end(),
+            suffix.trim_start(),
+            ""
+        );
 
+        log::info!("Starting refresh");
         self.pending_refresh = cx.spawn(|this, mut cx| async move {
             if debounce {
                 cx.background_executor()
@@ -71,10 +83,10 @@ impl InlineCompletionProvider for OllamaCompletionProvider {
                     .await;
             }
 
-            let _request = ChatRequest {
-                model: model.name,
+            let request = ChatRequest {
+                model: model.name.clone(),
                 messages: vec![ChatMessage::User {
-                    content: buffer_text,
+                    content: prompt,
                 }],
                 stream: false,
                 keep_alive: KeepAlive::default(),
@@ -85,22 +97,49 @@ impl InlineCompletionProvider for OllamaCompletionProvider {
                 tools: vec![],
             };
 
-            // TODO: Replace with actual API call implementation
-            let completion = "// Simulated completion".to_string();
+            // Make the API call to Ollama
+            let response = match model.chat(request).await {
+                Ok(response) => response,
+                Err(e) => {
+                    log::error!("Error calling Ollama: {:?}", e);
+                    log::info!("Model: {:?}", model);
+                    return Ok(());
+                }
+            };
 
-            this.update(&mut cx, |this, cx| {
-                this.current_completion = Some(completion);
-                this.buffer_id = Some(buffer_clone.entity_id());
-                this.file_extension = buffer_clone.read(cx).file().and_then(|file| {
-                    Some(
-                        Path::new(file.file_name(cx))
-                            .extension()?
-                            .to_str()?
-                            .to_string(),
-                    )
-                });
-                cx.notify();
-            })?;
+            // Extract completion from response
+            let completion = match response.message {
+                ChatMessage::Assistant { content, tool_calls: _} => {
+                    // Remove the FIM tags if they're in the response
+                    content
+                        .replace("<fim_middle>", "")
+                        .replace("<fim_prefix>", "")
+                        .replace("<fim_suffix>", "")
+                        .trim()
+                        .to_string()
+                }
+                e => {
+                    log::error!("Unexpected response from Ollama: {:?}", e);
+                    return Ok(());
+                }
+            };
+
+            // Only update if we got a non-empty completion
+            if !completion.is_empty() {
+                this.update(&mut cx, |this, cx| {
+                    this.current_completion = Some(completion);
+                    this.buffer_id = Some(buffer_clone.entity_id());
+                    this.file_extension = buffer_clone.read(cx).file().and_then(|file| {
+                        Some(
+                            Path::new(file.file_name(cx))
+                                .extension()?
+                                .to_str()?
+                                .to_string(),
+                        )
+                    });
+                    cx.notify();
+                })?;
+            }
 
             Ok(())
         });

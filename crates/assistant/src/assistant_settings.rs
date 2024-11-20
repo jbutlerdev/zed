@@ -310,7 +310,7 @@ impl AssistantSettingsContent {
                             _ => None,
                         };
                         settings.provider = Some(AssistantProviderContentV1::Ollama {
-                            default_model: Some(ollama::Model::new(&model, None, None)),
+                            default_model: Some(ollama::Model::new(model, api_url.clone().unwrap_or_default())),
                             api_url,
                         });
                     }
